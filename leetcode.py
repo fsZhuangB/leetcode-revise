@@ -86,7 +86,7 @@ def get_accepted_problems(session):
             "variables": {
                 "status": "ACCEPTED",
                 "skip": 0,
-                "first": 200000, # 一次返回的数据量
+                "first": 20000, # 一次返回的数据量
                 "sortField": "LAST_SUBMITTED_AT",
                 "sortOrder": "DESCENDING",
                 "difficulty": [
@@ -99,14 +99,39 @@ def get_accepted_problems(session):
 
     r = session.post(url, data=payload, headers=headers, verify=False)
     response_data = json.loads(r.text)
+    print("You have submited", len(response_data['data']['userProfileQuestions']['questions']), "questions" )
 
     return response_data
 
+def get_tag(session):
+    url = 'https://leetcode-cn.com/graphql/'
+    dict_payload = {
+            "operationName": "problemsetQuestionList",
+            "variables": {"categorySlug": "", "skip": 0, "limit": 100, "filters": {}},
+            "query": "\n    query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {\n  problemsetQuestionList(\n    categorySlug: $categorySlug\n    limit: $limit\n    skip: $skip\n    filters: $filters\n  ) {\n    hasMore\n    total\n    questions {\n      acRate\n      difficulty\n      freqBar\n      frontendQuestionId\n      isFavor\n      paidOnly\n      solutionNum\n      status\n      title\n      titleCn\n      titleSlug\n      topicTags {\n        name\n        nameTranslated\n        id\n        slug\n      }\n      extra {\n        hasVideoSolution\n        topCompanyTags {\n          imgUrl\n          slug\n          numSubscribed\n        }\n      }\n    }\n  }\n}\n    "
+        }
+    headers = {"content-type": "application/json", "origin": "https://leetcode-cn.com", "referer": "https://leetcode-cn.com/progress/", "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"}
 
+    # 翻页，一共25页，每次100个questions
+    for s in range(25):
+        dict_payload["variables"]["skip"] = s*100
+        payload = json.dumps(dict_payload)
+        r = session.post(url, data=payload, headers=headers, verify=False)
+        response_data = json.loads(r.text)
+        all_questions = response_data["data"]["problemsetQuestionList"]["questions"]
+        print(len(all_questions))
+        for ques in all_questions:
+            if ques["status"] == "AC":
+                print(ques["title"],":" ,ques["titleCn"])
+
+    #print(response_data)
+
+    return response_data
+
+    
 
 # 生成Markdown文本
 def generate_markdown_text(response_data, session):
-
 
     # 相关介绍
     response_data = response_data['data']['userProfileQuestions']['questions']
@@ -133,6 +158,8 @@ def generate_markdown_text(response_data, session):
     markdown_text += "| 最近提交时间 | 题目 | 题目难度 | 提交次数| 重刷次数 |\n| ---- | ---- | ---- | ---- | ---- |\n"
 
     for index, sub_data in enumerate(response_data):
+        # print("sub_data is:")
+        # print(sub_data)
 
         # 显示进度
         print('{}/{}'.format(index + 1, len(response_data)))
@@ -153,39 +180,36 @@ def generate_markdown_text(response_data, session):
         submission_list = submission_dict['data']['submissionList']['submissions']
         submission_accepted_dict = {}
 
-        for submission in submission_list:
-            status = submission['statusDisplay']
-            if (status == 'Accepted'):
-                submission_time = time.strftime("%Y-%m-%d", time.localtime(int(submission['timestamp'])))
-                if submission_time in submission_accepted_dict.keys():
-                    submission_accepted_dict[submission_time] += 1
-                else:
-                    submission_accepted_dict[submission_time] = 1
+        # for submission in submission_list:
+        #     status = submission['statusDisplay']
+        #     if (status == 'Accepted'):
+        #         submission_time = time.strftime("%Y-%m-%d", time.localtime(int(submission['timestamp'])))
+        #         if submission_time in submission_accepted_dict.keys():
+        #             submission_accepted_dict[submission_time] += 1
+        #         else:
+        #             submission_accepted_dict[submission_time] = 1
 
-        # 重刷次数
-        count = len(submission_accepted_dict)
-        if count > 1:
-            count = "**" + str(count) + "**"
-        else:
-            count = str(count)
+        # # 重刷次数
+        # count = len(submission_accepted_dict)
+        # if count > 1:
+        #     count = "**" + str(count) + "**"
+        # else:
+        #     count = str(count)
 
-        # 更新Markdown文本
-        markdown_text += "| " + lastSubmittedAt + " | " + "[" + translatedTitle + "]" + "(" + url + ")" + " | " + difficulty + " | " + numSubmitted + " | " + count + " |" + "\n"
+        # # 更新Markdown文本
+        # markdown_text += "| " + lastSubmittedAt + " | " + "[" + translatedTitle + "]" + "(" + url + ")" + " | " + difficulty + " | " + numSubmitted + " | " + count + " |" + "\n"
 
 
     return markdown_text
 
 
 
-
-
-
-
 if __name__ == '__main__':
     session = login(sys.argv[1], sys.argv[2]) # 登录，第一个参数为leetcode邮箱账号，第二个参数为leetcode密码
-    response_data = get_accepted_problems(session) # 获取所有通过的题目列表
-    markdown_text = generate_markdown_text(response_data, session) # 生成Markdown文本
+    get_tag(session)
+    #response_data = get_accepted_problems(session) # 获取所有通过的题目列表
+    #markdown_text = generate_markdown_text(response_data, session) # 生成Markdown文本
 
-    # 更新README.md文件
-    with open("README.md", "w") as f:
-        f.write(markdown_text)
+    # # 更新README.md文件
+    # with open("README.md", "w") as f:
+    #     f.write(markdown_text)
